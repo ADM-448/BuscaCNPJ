@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Consulta CNPJ - Busque informações de empresas pela Receita Federal e exporte para Word">
+    <title>Consulta CNPJ | Informações de Empresas</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
+    <script src="https://unpkg.com/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+    <style>
+        *, *::before, *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #111827;
+            --bg-card: rgba(17, 24, 39, 0.7);
+            --bg-card-hover: rgba(30, 41, 59, 0.8);
+            --border-subtle: rgba(99, 102, 241, 0.15);
+            --border-glow: rgba(99, 102, 241, 0.4);
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent-primary: #6366f1;
+            --accent-secondary: #818cf8;
+            --accent-tertiary: #a78bfa;
+            --success: #10b981;
+            --success-bg: rgba(16, 185, 129, 0.1);
+            --warning: #f59e0b;
+            --warning-bg: rgba(245, 158, 11, 0.1);
+            --error: #ef4444;
+            --error-bg: rgba(239, 68, 68, 0.1);
+            --gradient-hero: linear-gradient(135deg, #6366f1, #8b5cf6, #a78bfa);
+            --gradient-card: linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(139, 92, 246, 0.05));
+            --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.4);
+            --shadow-glow: 0 0 40px rgba(99, 102, 241, 0.15);
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --radius-xl: 24px;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Animated Background */
+        .bg-animation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .bg-animation .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.3;
+            animation: float 20s ease-in-out infinite;
+        }
+
+        .bg-animation .orb:nth-child(1) {
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, #6366f1, transparent);
+            top: -200px;
+            right: -100px;
+            animation-delay: 0s;
+        }
+
+        .bg-animation .orb:nth-child(2) {
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, #8b5cf6, transparent);
+            bottom: -100px;
+            left: -100px;
+            animation-delay: -7s;
+        }
+
+        .bg-animation .orb:nth-child(3) {
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, #a78bfa, transparent);
+            top: 50%;
+            left: 50%;
+            animation-delay: -14s;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            25% { transform: translate(50px, -50px) scale(1.1); }
+            50% { transform: translate(-30px, 30px) scale(0.95); }
+            75% { transform: translate(20px, 60px) scale(1.05); }
+        }
+
+        /* Grid pattern overlay */
+        .grid-pattern {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
+            background-image:
+                linear-gradient(rgba(99, 102, 241, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(99, 102, 241, 0.03) 1px, transparent 1px);
+            background-size: 60px 60px;
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 24px 80px;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 48px;
+            animation: fadeInDown 0.8s ease-out;
+        }
+
+        .header .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 16px;
+            background: rgba(99, 102, 241, 0.1);
+            border: 1px solid var(--border-subtle);
+            border-radius: 100px;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--accent-secondary);
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            margin-bottom: 20px;
+        }
+
+        .header .badge .dot {
+            width: 6px;
+            height: 6px;
+            background: var(--success);
+            border-radius: 50%;
+            animation: pulse-dot 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
+        }
+
+        .header h1 {
+            font-size: clamp(32px, 5vw, 48px);
+            font-weight: 800;
+            background: var(--gradient-hero);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1.1;
+            margin-bottom: 12px;
+        }
+
+        .header p {
+            font-size: 16px;
+            color: var(--text-secondary);
+            font-weight: 300;
+            max-width: 500px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+
+        /* Search Card */
+        .search-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-xl);
+            padding: 32px;
+            margin-bottom: 32px;
+            box-shadow: var(--shadow-glow);
+            animation: fadeInUp 0.8s ease-out 0.2s both;
+            transition: border-color 0.3s ease;
+        }
+
+        .search-card:focus-within {
+            border-color: var(--border-glow);
+        }
+
+        .search-card label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 12px;
+            align-items: stretch;
+        }
+
+        .input-wrapper {
+            flex: 1;
+            position: relative;
+        }
+
+        .input-wrapper .icon {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            font-size: 18px;
+            transition: color 0.3s ease;
+        }
+
+        .input-wrapper input {
+            width: 100%;
+            padding: 16px 16px 16px 48px;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(99, 102, 241, 0.1);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            font-size: 18px;
+            font-weight: 500;
+            letter-spacing: 2px;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        .input-wrapper input::placeholder {
+            color: var(--text-muted);
+            font-weight: 300;
+            letter-spacing: 1px;
+            font-size: 15px;
+        }
+
+        .input-wrapper input:focus {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+        }
+
+        .input-wrapper input:focus ~ .icon {
+            color: var(--accent-secondary);
+        }
+
+        .btn-search {
+            padding: 16px 32px;
+            background: var(--gradient-hero);
+            border: none;
+            border-radius: var(--radius-md);
+            color: white;
+            font-family: 'Inter', sans-serif;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-search::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .btn-search:hover::before {
+            left: 100%;
+        }
+
+        .btn-search:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-search:active {
+            transform: translateY(0);
+        }
+
+        .btn-search:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-search .spinner {
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            display: none;
+        }
+
+        .btn-search.loading .spinner {
+            display: block;
+        }
+
+        .btn-search.loading .btn-text {
+            display: none;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Status Messages */
+        .status-msg {
+            padding: 14px 18px;
+            border-radius: var(--radius-md);
+            font-size: 14px;
+            font-weight: 500;
+            margin-top: 16px;
+            display: none;
+            align-items: center;
+            gap: 10px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .status-msg.error {
+            display: flex;
+            background: var(--error-bg);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+        }
+
+        .status-msg.success {
+            display: flex;
+            background: var(--success-bg);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            color: #6ee7b7;
+        }
+
+        .status-msg.warning {
+            display: flex;
+            background: var(--warning-bg);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+            color: #fcd34d;
+        }
+
+        /* Results Area */
+        .results-area {
+            display: none;
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        .results-area.visible {
+            display: block;
+        }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .results-header h2 {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .btn-export {
+            padding: 10px 24px;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: var(--radius-md);
+            color: var(--success);
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-export:hover {
+            background: rgba(16, 185, 129, 0.2);
+            border-color: rgba(16, 185, 129, 0.5);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.2);
+        }
+
+        /* Simple Results - Document Style */
+        .simple-results {
+            background: var(--bg-card);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 32px;
+            color: var(--text-primary);
+            font-size: 14px;
+            line-height: 1.8;
+        }
+
+        .simple-results .generated-date {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 13px;
+            margin-bottom: 24px;
+        }
+
+        .simple-results .section-heading {
+            font-size: 17px;
+            font-weight: 700;
+            color: var(--accent-secondary);
+            margin: 24px 0 12px 0;
+            padding-bottom: 6px;
+            border-bottom: 1px solid rgba(99, 102, 241, 0.3);
+        }
+
+        .simple-results .section-heading:first-of-type {
+            margin-top: 0;
+        }
+
+        .simple-results .info-line {
+            margin: 2px 0;
+        }
+
+        .simple-results .info-line strong {
+            color: var(--text-secondary);
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* Responsive */
+        @media (max-width: 640px) {
+            .container { padding: 24px 16px 60px; }
+            .search-card { padding: 20px; }
+            .input-group { flex-direction: column; }
+            .btn-search { justify-content: center; }
+            .simple-results { padding: 20px; }
+            .results-header { flex-direction: column; gap: 12px; align-items: flex-start; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-animation">
+        <div class="orb"></div>
+        <div class="orb"></div>
+        <div class="orb"></div>
+    </div>
+    <div class="grid-pattern"></div>
+
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="badge">
+                <span class="dot"></span>
+                API ReceitaWS
+            </div>
+            <h1>Consulta CNPJ</h1>
+            <p>Digite o CNPJ da empresa e visualize todas as informações cadastrais. Exporte para Word com um clique.</p>
+        </header>
+
+        <!-- Search -->
+        <div class="search-card" id="searchCard">
+            <label for="cnpjInput">CNPJ da Empresa</label>
+            <div class="input-group">
+                <div class="input-wrapper">
+                    <span class="icon">🔍</span>
+                    <input
+                        type="text"
+                        id="cnpjInput"
+                        placeholder="00.000.000/0000-00"
+                        maxlength="18"
+                        autocomplete="off"
+                    >
+                </div>
+                <button class="btn-search" id="btnSearch" onclick="consultarCNPJ()">
+                    <span class="btn-text">Consultar</span>
+                    <div class="spinner"></div>
+                </button>
+            </div>
+            <div class="status-msg" id="statusMsg"></div>
+        </div>
+
+        <!-- Results -->
+        <div class="results-area" id="resultsArea">
+            <div class="results-header">
+                <h2>📋 Dados da Empresa</h2>
+                <button class="btn-export" id="btnExport" onclick="exportarWord()">
+                    📄 Exportar Word
+                </button>
+            </div>
+            <div id="resultsContent"></div>
+        </div>
+    </div>
+
+    <script>
+        // =========== CNPJ Mask ===========
+        const cnpjInput = document.getElementById('cnpjInput');
+
+        cnpjInput.addEventListener('input', function(e) {
+            let val = e.target.value.replace(/\D/g, '');
+            if (val.length > 14) val = val.slice(0, 14);
+
+            if (val.length > 12) {
+                val = val.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{1,2})/, '$1.$2.$3/$4-$5');
+            } else if (val.length > 8) {
+                val = val.replace(/^(\d{2})(\d{3})(\d{3})(\d{1,4})/, '$1.$2.$3/$4');
+            } else if (val.length > 5) {
+                val = val.replace(/^(\d{2})(\d{3})(\d{1,3})/, '$1.$2.$3');
+            } else if (val.length > 2) {
+                val = val.replace(/^(\d{2})(\d{1,3})/, '$1.$2');
+            }
+
+            e.target.value = val;
+        });
+
+        cnpjInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                consultarCNPJ();
+            }
+        });
+
+        // =========== Status Message ===========
+        function showStatus(msg, type) {
+            const el = document.getElementById('statusMsg');
+            const icons = { error: '❌', success: '✅', warning: '⚠️' };
+            el.className = `status-msg ${type}`;
+            el.innerHTML = `<span>${icons[type] || ''}</span> ${msg}`;
+        }
+
+        function clearStatus() {
+            const el = document.getElementById('statusMsg');
+            el.className = 'status-msg';
+            el.innerHTML = '';
+        }
+
+        // =========== API Lookup ===========
+        let dadosEmpresa = null;
+
+        function formatCNPJNumber(raw) {
+            if (!raw) return '';
+            const s = String(raw).replace(/\D/g, '').padStart(14, '0');
+            return s.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+        }
+
+        function formatCEP(raw) {
+            if (!raw) return '';
+            const s = String(raw).replace(/\D/g, '').padStart(8, '0');
+            return s.replace(/^(\d{2})(\d{3})(\d{3})$/, '$1.$2-$3');
+        }
+
+        function formatPhone(ddd) {
+            if (!ddd) return '';
+            const s = String(ddd).replace(/\D/g, '');
+            if (s.length <= 2) return '';
+            const dd = s.slice(0, 2);
+            const num = s.slice(2);
+            return `(${dd}) ${num}`;
+        }
+
+        function formatCNAECode(code) {
+            if (!code) return '';
+            const s = String(code).padStart(7, '0');
+            return s.replace(/^(\d{2})(\d{2})(\d{1})(\d{2})$/, '$1.$2-$3-$4');
+        }
+
+        function normalizeBrasilAPI(d) {
+            // Map BrasilAPI fields to the format used by renderResults/exportarWord
+            const phones = [formatPhone(d.ddd_telefone_1), formatPhone(d.ddd_telefone_2)].filter(Boolean);
+
+            return {
+                cnpj: formatCNPJNumber(d.cnpj),
+                nome: d.razao_social || '',
+                fantasia: d.nome_fantasia || '',
+                situacao: d.descricao_situacao_cadastral || '',
+                data_situacao: d.data_situacao_cadastral || '',
+                abertura: d.data_inicio_atividade ? new Date(d.data_inicio_atividade).toLocaleDateString('pt-BR') : '',
+                tipo: d.descricao_identificador_matriz_filial || '',
+                porte: d.porte || '',
+                natureza_juridica: d.natureza_juridica || '',
+                capital_social: d.capital_social ? String(d.capital_social) : '',
+                logradouro: [d.descricao_tipo_de_logradouro, d.logradouro].filter(Boolean).join(' '),
+                numero: d.numero || '',
+                complemento: d.complemento || '',
+                bairro: d.bairro || '',
+                municipio: d.municipio || '',
+                uf: d.uf || '',
+                cep: formatCEP(d.cep),
+                telefone: phones.join(' / '),
+                email: d.email || '',
+                atividade_principal: d.cnae_fiscal ? [{
+                    code: formatCNAECode(d.cnae_fiscal),
+                    text: d.cnae_fiscal_descricao || ''
+                }] : [],
+                atividades_secundarias: (d.cnaes_secundarios || []).map(a => ({
+                    code: formatCNAECode(a.codigo),
+                    text: a.descricao || ''
+                })),
+                qsa: (d.qsa || []).map(s => ({
+                    nome: s.nome_socio || '',
+                    qual: s.qualificacao_socio || ''
+                })),
+                simples: { optante: d.opcao_pelo_simples === true },
+                simei: { optante: d.opcao_pelo_mei === true },
+            };
+        }
+
+        async function fetchCNPJ(raw) {
+            const url = `https://brasilapi.com.br/api/cnpj/v1/${raw}`;
+
+            // Tenta direto primeiro
+            try {
+                const resp = await fetch(url);
+                if (resp.ok || resp.status === 404 || resp.status === 429) return resp;
+            } catch (e) {
+                // CORS bloqueou, tenta via proxy
+            }
+
+            // Fallback: proxy CORS
+            const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+            return await fetch(proxyUrl);
+        }
+
+        async function consultarCNPJ() {
+            const raw = cnpjInput.value.replace(/\D/g, '');
+            clearStatus();
+
+            if (raw.length !== 14) {
+                showStatus('Digite um CNPJ válido com 14 dígitos.', 'warning');
+                return;
+            }
+
+            const btn = document.getElementById('btnSearch');
+            btn.classList.add('loading');
+            btn.disabled = true;
+
+            try {
+                const resp = await fetchCNPJ(raw);
+
+                if (resp.status === 429) {
+                    showStatus('Limite de consultas excedido. Aguarde 1 minuto e tente novamente.', 'warning');
+                    return;
+                }
+
+                if (resp.status === 404) {
+                    showStatus('CNPJ não encontrado na base da Receita Federal.', 'error');
+                    return;
+                }
+
+                if (!resp.ok) {
+                    showStatus(`Erro na API (HTTP ${resp.status}). Tente novamente.`, 'error');
+                    return;
+                }
+
+                const raw_data = await resp.json();
+                const dados = normalizeBrasilAPI(raw_data);
+
+                dadosEmpresa = dados;
+                showStatus('Consulta realizada com sucesso!', 'success');
+                renderResults(dados);
+
+            } catch (err) {
+                showStatus('Erro de conexão. Verifique sua internet e tente novamente.', 'error');
+                console.error(err);
+            } finally {
+                btn.classList.remove('loading');
+                btn.disabled = false;
+            }
+        }
+
+        // =========== Render Results ===========
+        function formatCurrency(val) {
+            if (!val) return '—';
+            return parseFloat(val).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        }
+
+        function getInitials(name) {
+            return name.split(' ').filter(w => w.length > 1).slice(0, 2).map(w => w[0]).join('');
+        }
+
+        function renderResults(d) {
+            const area = document.getElementById('resultsArea');
+            const content = document.getElementById('resultsContent');
+
+            const now = new Date();
+            const dataGerado = `Gerado em ${now.toLocaleDateString('pt-BR')} às ${now.toLocaleTimeString('pt-BR')}`;
+
+            const line = (label, value) => `<p class="info-line"><strong>${label}:</strong> ${value || '—'}</p>`;
+
+            const endereco = [d.logradouro, d.numero, d.complemento].filter(Boolean).join(', ');
+
+            let html = `<div class="simple-results">`;
+            html += `<p class="generated-date">${dataGerado}</p>`;
+
+            // 1. Dados Cadastrais
+            html += `<h3 class="section-heading">1. Dados Cadastrais</h3>`;
+            html += line('CNPJ', d.cnpj);
+            html += line('Razão Social', d.nome);
+            html += line('Nome Fantasia', d.fantasia);
+            html += line('Situação Cadastral', d.situacao);
+            html += line('Data da Situação', d.data_situacao);
+            html += line('Data de Abertura', d.abertura);
+            html += line('Tipo', d.tipo);
+            html += line('Porte', d.porte);
+            html += line('Natureza Jurídica', d.natureza_juridica);
+            html += line('Capital Social', formatCurrency(d.capital_social));
+
+            // 2. Endereço
+            html += `<h3 class="section-heading">2. Endereço</h3>`;
+            html += line('Logradouro', endereco);
+            html += line('Bairro', d.bairro);
+            html += line('Município', d.municipio);
+            html += line('UF', d.uf);
+            html += line('CEP', d.cep);
+
+            // 3. Contato
+            html += `<h3 class="section-heading">3. Contato</h3>`;
+            html += line('Telefone', d.telefone);
+            html += line('E-mail', d.email);
+
+            // 4. Atividade Principal
+            const atvP = d.atividade_principal || [];
+            if (atvP.length > 0) {
+                html += `<h3 class="section-heading">4. Atividade Principal</h3>`;
+                atvP.forEach(a => {
+                    html += `<p class="info-line"><strong>[${a.code}]</strong> ${a.text}</p>`;
+                });
+            }
+
+            // 5. Atividades Secundárias
+            const atvS = (d.atividades_secundarias || []).filter(a => a.code !== '00.00-0-00');
+            if (atvS.length > 0) {
+                html += `<h3 class="section-heading">5. Atividades Secundárias</h3>`;
+                atvS.forEach((a, i) => {
+                    html += `<p class="info-line">${i + 1}. <strong>[${a.code}]</strong> ${a.text}</p>`;
+                });
+            }
+
+            // 6. Quadro Societário
+            const qsa = d.qsa || [];
+            if (qsa.length > 0) {
+                html += `<h3 class="section-heading">6. Quadro Societário</h3>`;
+                qsa.forEach((s, i) => {
+                    html += `<p class="info-line">${i + 1}. <strong>${s.nome}</strong> — ${s.qual}</p>`;
+                });
+            }
+
+            // 7. Simples Nacional / SIMEI
+            html += `<h3 class="section-heading">7. Simples Nacional / SIMEI</h3>`;
+            html += line('Optante Simples', d.simples && d.simples.optante ? 'Sim' : 'Não');
+            html += line('Optante SIMEI', d.simei && d.simei.optante ? 'Sim' : 'Não');
+
+            html += `</div>`;
+
+            content.innerHTML = html;
+            area.classList.add('visible');
+            area.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        // =========== Export to Word (.docx) ===========
+        async function exportarWord() {
+            if (!dadosEmpresa) return;
+            const d = dadosEmpresa;
+
+            try {
+            if (typeof window.docx === 'undefined') {
+                alert('Erro: A biblioteca de geração de Word não foi carregada. Verifique sua conexão com a internet e recarregue a página.');
+                return;
+            }
+
+            const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle, TableRow, TableCell, Table, WidthType } = window.docx;
+
+            const titleStyle = {
+                bold: true,
+                size: 28,
+                color: '2D3748',
+                font: 'Calibri',
+            };
+
+            const headingStyle = {
+                bold: true,
+                size: 24,
+                color: '4338CA',
+                font: 'Calibri',
+            };
+
+            const labelStyle = {
+                bold: true,
+                size: 20,
+                color: '4A5568',
+                font: 'Calibri',
+            };
+
+            const valueStyle = {
+                size: 20,
+                color: '1A202C',
+                font: 'Calibri',
+            };
+
+            function infoLine(label, value) {
+                return new Paragraph({
+                    spacing: { after: 80 },
+                    children: [
+                        new TextRun({ ...labelStyle, text: `${label}: ` }),
+                        new TextRun({ ...valueStyle, text: value || '—' }),
+                    ],
+                });
+            }
+
+            function sectionHeading(text) {
+                return new Paragraph({
+                    spacing: { before: 300, after: 150 },
+                    border: {
+                        bottom: { style: BorderStyle.SINGLE, size: 1, color: '4338CA' },
+                    },
+                    children: [
+                        new TextRun({ ...headingStyle, text }),
+                    ],
+                });
+            }
+
+            const children = [];
+
+            // Title
+            children.push(new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { after: 100 },
+                children: [
+                    new TextRun({ ...titleStyle, size: 36, text: 'Relatório de Consulta CNPJ' }),
+                ],
+            }));
+
+            children.push(new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { after: 300 },
+                children: [
+                    new TextRun({ size: 18, color: '718096', font: 'Calibri', text: `Gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}` }),
+                ],
+            }));
+
+            // 1. Dados Cadastrais
+            children.push(sectionHeading('1. Dados Cadastrais'));
+            children.push(infoLine('CNPJ', d.cnpj));
+            children.push(infoLine('Razão Social', d.nome));
+            children.push(infoLine('Nome Fantasia', d.fantasia));
+            children.push(infoLine('Situação Cadastral', d.situacao));
+            children.push(infoLine('Data da Situação', d.data_situacao));
+            children.push(infoLine('Data de Abertura', d.abertura));
+            children.push(infoLine('Tipo', d.tipo));
+            children.push(infoLine('Porte', d.porte));
+            children.push(infoLine('Natureza Jurídica', d.natureza_juridica));
+            children.push(infoLine('Capital Social', formatCurrency(d.capital_social)));
+
+            // 2. Endereço
+            children.push(sectionHeading('2. Endereço'));
+            const enderecoCompleto = [d.logradouro, d.numero, d.complemento].filter(Boolean).join(', ');
+            children.push(infoLine('Logradouro', enderecoCompleto));
+            children.push(infoLine('Bairro', d.bairro));
+            children.push(infoLine('Município', d.municipio));
+            children.push(infoLine('UF', d.uf));
+            children.push(infoLine('CEP', d.cep));
+
+            // 3. Contato
+            children.push(sectionHeading('3. Contato'));
+            children.push(infoLine('Telefone', d.telefone));
+            children.push(infoLine('E-mail', d.email));
+
+            // 4. Atividade Principal
+            const atvP = d.atividade_principal || [];
+            if (atvP.length > 0) {
+                children.push(sectionHeading('4. Atividade Principal'));
+                atvP.forEach(a => {
+                    children.push(new Paragraph({
+                        spacing: { after: 60 },
+                        children: [
+                            new TextRun({ ...labelStyle, text: `[${a.code}] ` }),
+                            new TextRun({ ...valueStyle, text: a.text }),
+                        ],
+                    }));
+                });
+            }
+
+            // 5. Atividades Secundárias
+            const atvS = (d.atividades_secundarias || []).filter(a => a.code !== '00.00-0-00');
+            if (atvS.length > 0) {
+                children.push(sectionHeading('5. Atividades Secundárias'));
+                atvS.forEach((a, i) => {
+                    children.push(new Paragraph({
+                        spacing: { after: 60 },
+                        children: [
+                            new TextRun({ ...labelStyle, text: `${i + 1}. [${a.code}] ` }),
+                            new TextRun({ ...valueStyle, text: a.text }),
+                        ],
+                    }));
+                });
+            }
+
+            // 6. Quadro Societário
+            const qsa = d.qsa || [];
+            if (qsa.length > 0) {
+                children.push(sectionHeading('6. Quadro Societário'));
+                qsa.forEach((s, i) => {
+                    children.push(new Paragraph({
+                        spacing: { after: 60 },
+                        children: [
+                            new TextRun({ ...labelStyle, text: `${i + 1}. ` }),
+                            new TextRun({ ...valueStyle, bold: true, text: s.nome }),
+                            new TextRun({ ...valueStyle, text: ` — ${s.qual}` }),
+                        ],
+                    }));
+                });
+            }
+
+            // 7. Simples Nacional
+            children.push(sectionHeading('7. Simples Nacional / SIMEI'));
+            children.push(infoLine('Optante Simples', d.simples && d.simples.optante ? 'Sim' : 'Não'));
+            children.push(infoLine('Optante SIMEI', d.simei && d.simei.optante ? 'Sim' : 'Não'));
+
+            // Footer
+            children.push(new Paragraph({
+                spacing: { before: 400 },
+                alignment: AlignmentType.CENTER,
+                children: [
+                    new TextRun({ size: 16, color: 'A0AEC0', italics: true, font: 'Calibri', text: 'Dados obtidos via API ReceitaWS — consulta pública à Receita Federal' }),
+                ],
+            }));
+
+            const doc = new Document({
+                sections: [{
+                    properties: {
+                        page: {
+                            margin: { top: 1000, bottom: 1000, left: 1200, right: 1200 },
+                        },
+                    },
+                    children,
+                }],
+            });
+
+            const blob = await Packer.toBlob(doc);
+            const nomeArquivo = (d.nome || 'empresa').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 40);
+            saveAs(blob, `Consulta_CNPJ_${nomeArquivo}.docx`);
+
+            } catch (err) {
+                console.error('Erro ao exportar Word:', err);
+                alert('Erro ao gerar o arquivo Word. Verifique o console para mais detalhes.');
+            }
+        }
+    </script>
+</body>
+</html>
