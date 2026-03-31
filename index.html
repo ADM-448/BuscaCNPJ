@@ -607,6 +607,13 @@
             return s.replace(/^(\d{2})(\d{2})(\d{1})(\d{2})$/, '$1.$2-$3-$4');
         }
 
+        function formatDate(val) {
+            if (!val) return '';
+            try {
+                return new Date(val).toLocaleDateString('pt-BR');
+            } catch(e) { return val; }
+        }
+
         function normalizeBrasilAPI(d) {
             // Map BrasilAPI fields to the format used by renderResults/exportarWord
             const phones = [formatPhone(d.ddd_telefone_1), formatPhone(d.ddd_telefone_2)].filter(Boolean);
@@ -616,8 +623,9 @@
                 nome: d.razao_social || '',
                 fantasia: d.nome_fantasia || '',
                 situacao: d.descricao_situacao_cadastral || '',
+                motivo_situacao: d.descricao_motivo_situacao_cadastral || '',
                 data_situacao: d.data_situacao_cadastral || '',
-                abertura: d.data_inicio_atividade ? new Date(d.data_inicio_atividade).toLocaleDateString('pt-BR') : '',
+                abertura: formatDate(d.data_inicio_atividade),
                 tipo: d.descricao_identificador_matriz_filial || '',
                 porte: d.porte || '',
                 natureza_juridica: d.natureza_juridica || '',
@@ -629,6 +637,7 @@
                 municipio: d.municipio || '',
                 uf: d.uf || '',
                 cep: formatCEP(d.cep),
+                pais: d.pais || '',
                 telefone: phones.join(' / '),
                 email: d.email || '',
                 atividade_principal: d.cnae_fiscal ? [{
@@ -641,10 +650,24 @@
                 })),
                 qsa: (d.qsa || []).map(s => ({
                     nome: s.nome_socio || '',
-                    qual: s.qualificacao_socio || ''
+                    qual: s.qualificacao_socio || '',
+                    cpf: s.cnpj_cpf_do_socio || '',
+                    data_entrada: formatDate(s.data_entrada_sociedade),
+                    faixa_etaria: s.faixa_etaria || '',
                 })),
-                simples: { optante: d.opcao_pelo_simples === true },
-                simei: { optante: d.opcao_pelo_mei === true },
+                simples: {
+                    optante: d.opcao_pelo_simples === true,
+                    data_opcao: formatDate(d.data_opcao_pelo_simples),
+                    data_exclusao: formatDate(d.data_exclusao_do_simples),
+                },
+                simei: {
+                    optante: d.opcao_pelo_mei === true,
+                    data_opcao: formatDate(d.data_opcao_pelo_mei),
+                    data_exclusao: formatDate(d.data_exclusao_do_mei),
+                },
+                situacao_especial: d.situacao_especial || '',
+                data_situacao_especial: formatDate(d.data_situacao_especial),
+                efr: d.ente_federativo_responsavel || '',
             };
         }
 
@@ -741,12 +764,18 @@
             html += line('Razão Social', d.nome);
             html += line('Nome Fantasia', d.fantasia);
             html += line('Situação Cadastral', d.situacao);
+            html += line('Motivo da Situação', d.motivo_situacao);
             html += line('Data da Situação', d.data_situacao);
             html += line('Data de Abertura', d.abertura);
             html += line('Tipo', d.tipo);
             html += line('Porte', d.porte);
             html += line('Natureza Jurídica', d.natureza_juridica);
             html += line('Capital Social', formatCurrency(d.capital_social));
+            if (d.efr) html += line('Ente Federativo Responsável', d.efr);
+            if (d.situacao_especial) {
+                html += line('Situação Especial', d.situacao_especial);
+                html += line('Data Situação Especial', d.data_situacao_especial);
+            }
 
             // 2. Endereço
             html += `<h3 class="section-heading">2. Endereço</h3>`;
@@ -755,6 +784,8 @@
             html += line('Município', d.municipio);
             html += line('UF', d.uf);
             html += line('CEP', d.cep);
+            if (d.pais) html += line('País', d.pais);
+            html += line('Endereço por Extenso', `${endereco}, ${d.bairro}, CEP ${d.cep}, ${d.municipio} - ${d.uf}`);
 
             // 3. Contato
             html += `<h3 class="section-heading">3. Contato</h3>`;
@@ -784,14 +815,22 @@
             if (qsa.length > 0) {
                 html += `<h3 class="section-heading">6. Quadro Societário</h3>`;
                 qsa.forEach((s, i) => {
-                    html += `<p class="info-line">${i + 1}. <strong>${s.nome}</strong> — ${s.qual}</p>`;
+                    let socioLine = `${i + 1}. <strong>${s.nome}</strong> — ${s.qual}`;
+                    if (s.cpf) socioLine += ` | CPF/CNPJ: ${s.cpf}`;
+                    if (s.data_entrada) socioLine += ` | Entrada: ${s.data_entrada}`;
+                    if (s.faixa_etaria) socioLine += ` | ${s.faixa_etaria}`;
+                    html += `<p class="info-line">${socioLine}</p>`;
                 });
             }
 
             // 7. Simples Nacional / SIMEI
             html += `<h3 class="section-heading">7. Simples Nacional / SIMEI</h3>`;
             html += line('Optante Simples', d.simples && d.simples.optante ? 'Sim' : 'Não');
+            if (d.simples.data_opcao) html += line('Data Opção Simples', d.simples.data_opcao);
+            if (d.simples.data_exclusao) html += line('Data Exclusão Simples', d.simples.data_exclusao);
             html += line('Optante SIMEI', d.simei && d.simei.optante ? 'Sim' : 'Não');
+            if (d.simei.data_opcao) html += line('Data Opção MEI', d.simei.data_opcao);
+            if (d.simei.data_exclusao) html += line('Data Exclusão MEI', d.simei.data_exclusao);
 
             html += `</div>`;
 
@@ -887,12 +926,18 @@
             children.push(infoLine('Razão Social', d.nome));
             children.push(infoLine('Nome Fantasia', d.fantasia));
             children.push(infoLine('Situação Cadastral', d.situacao));
+            children.push(infoLine('Motivo da Situação', d.motivo_situacao));
             children.push(infoLine('Data da Situação', d.data_situacao));
             children.push(infoLine('Data de Abertura', d.abertura));
             children.push(infoLine('Tipo', d.tipo));
             children.push(infoLine('Porte', d.porte));
             children.push(infoLine('Natureza Jurídica', d.natureza_juridica));
             children.push(infoLine('Capital Social', formatCurrency(d.capital_social)));
+            if (d.efr) children.push(infoLine('Ente Federativo Responsável', d.efr));
+            if (d.situacao_especial) {
+                children.push(infoLine('Situação Especial', d.situacao_especial));
+                children.push(infoLine('Data Situação Especial', d.data_situacao_especial));
+            }
 
             // 2. Endereço
             children.push(sectionHeading('2. Endereço'));
@@ -902,6 +947,8 @@
             children.push(infoLine('Município', d.municipio));
             children.push(infoLine('UF', d.uf));
             children.push(infoLine('CEP', d.cep));
+            if (d.pais) children.push(infoLine('País', d.pais));
+            children.push(infoLine('Endereço por Extenso', `${enderecoCompleto}, ${d.bairro}, CEP ${d.cep}, ${d.municipio} - ${d.uf}`));
 
             // 3. Contato
             children.push(sectionHeading('3. Contato'));
@@ -943,12 +990,18 @@
             if (qsa.length > 0) {
                 children.push(sectionHeading('6. Quadro Societário'));
                 qsa.forEach((s, i) => {
+                    const extras = [];
+                    if (s.cpf) extras.push(`CPF/CNPJ: ${s.cpf}`);
+                    if (s.data_entrada) extras.push(`Entrada: ${s.data_entrada}`);
+                    if (s.faixa_etaria) extras.push(s.faixa_etaria);
+                    const extrasText = extras.length > 0 ? ` | ${extras.join(' | ')}` : '';
+
                     children.push(new Paragraph({
                         spacing: { after: 60 },
                         children: [
                             new TextRun({ ...labelStyle, text: `${i + 1}. ` }),
                             new TextRun({ ...valueStyle, bold: true, text: s.nome }),
-                            new TextRun({ ...valueStyle, text: ` — ${s.qual}` }),
+                            new TextRun({ ...valueStyle, text: ` — ${s.qual}${extrasText}` }),
                         ],
                     }));
                 });
@@ -957,7 +1010,11 @@
             // 7. Simples Nacional
             children.push(sectionHeading('7. Simples Nacional / SIMEI'));
             children.push(infoLine('Optante Simples', d.simples && d.simples.optante ? 'Sim' : 'Não'));
+            if (d.simples.data_opcao) children.push(infoLine('Data Opção Simples', d.simples.data_opcao));
+            if (d.simples.data_exclusao) children.push(infoLine('Data Exclusão Simples', d.simples.data_exclusao));
             children.push(infoLine('Optante SIMEI', d.simei && d.simei.optante ? 'Sim' : 'Não'));
+            if (d.simei.data_opcao) children.push(infoLine('Data Opção MEI', d.simei.data_opcao));
+            if (d.simei.data_exclusao) children.push(infoLine('Data Exclusão MEI', d.simei.data_exclusao));
 
             // Footer
             children.push(new Paragraph({
